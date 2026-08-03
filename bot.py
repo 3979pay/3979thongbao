@@ -8,7 +8,7 @@ from telegram.ext import (
     ContextTypes
 )
 
-TOKEN = "YOUR_BOT_TOKEN"
+TOKEN = "8776864453:AAEGGFR09xA1gXfEjDne5n6NXl9yAWPW0Vs"
 TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 DB = "notifications.db"
 
@@ -208,9 +208,24 @@ async def main():
     await app.start()
     await app.updater.start_polling()
 
-    await app.updater.idle()
+def main():
+    global app
+
+    init_db()
+
+    app = Application.builder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("them", them))
+    app.add_handler(CommandHandler("them_ngay", them_ngay))
+    app.add_handler(CommandHandler("list", list_cmd))
+    app.add_handler(CommandHandler("xoa", xoa))
+    app.add_handler(CallbackQueryHandler(done))
+
+    app.job_queue.run_repeating(check_notifications, interval=30)
+
+    app.run_polling()
 
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
