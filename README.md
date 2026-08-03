@@ -1,9 +1,6 @@
-Telegram Notification Bot v3
+Telegram Notification Bot v3.1
 
-Features:
-- GMT+7
-- GIF notification support
-- Completed button
-- Reminder system
-
-Put gif files into gifs/
+/them YYYY-MM-DD HH:MM Noi dung
+/them_ngay HH:MM Noi dung
+/list
+/xoa ID
