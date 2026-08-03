@@ -204,9 +204,8 @@ async def main():
 
     app.job_queue.run_repeating(check_notifications, interval=30)
 
-    await app.run_polling()
+    app.run_polling()
 
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
