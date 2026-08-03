@@ -1,9 +1,8 @@
 # Telegram Notification Bot
 
-Windows VPS compatible.
-
 Commands:
- /them_daily HH:MM message
- /them_once YYYY-MM-DD HH:MM message
- /list
- /xoa ID
+- /start
+- /them_daily HH:MM Noi dung
+- /them_once YYYY-MM-DD HH:MM Noi dung
+- /list
+- /xoa ID
