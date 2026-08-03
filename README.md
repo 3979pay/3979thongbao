@@ -1,3 +1,1 @@
-Telegram Notification Bot v3.3
-
-Optimized completion button response.
+Telegram Notification Bot v3.4
