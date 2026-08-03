@@ -1,6 +1,9 @@
-from telegram.ext import Application
+# Telegram Notify Bot v4.1
+# Replace TOKEN with your BotFather token.
 
 TOKEN = "YOUR_BOT_TOKEN"
+
+from telegram.ext import Application
 
 def main():
     app = Application.builder().token(TOKEN).build()
