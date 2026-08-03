@@ -204,11 +204,7 @@ async def main():
 
     app.job_queue.run_repeating(check_notifications, interval=30)
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-
-    await app.updater.idle()
+    await app.run_polling()
 
 
 if __name__ == "__main__":
