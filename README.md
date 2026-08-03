@@ -1,8 +1,9 @@
-# Telegram Notification Bot
+Telegram Notification Bot v3
 
-Commands:
-- /start
-- /them_daily HH:MM Noi dung
-- /them_once YYYY-MM-DD HH:MM Noi dung
-- /list
-- /xoa ID
+Features:
+- GMT+7
+- GIF notification support
+- Completed button
+- Reminder system
+
+Put gif files into gifs/
