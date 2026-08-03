@@ -1,1 +1,1 @@
-Telegram Notification Bot v3.4
+Telegram Notification Bot v3.5
