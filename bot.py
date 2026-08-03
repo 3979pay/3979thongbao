@@ -1,6 +1,6 @@
 import sqlite3
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -15,58 +15,90 @@ app = None
 scheduler = BackgroundScheduler()
 
 
-def connect():
+def conn():
     return sqlite3.connect(DB)
 
 
 def init_db():
-    con = connect()
-    con.execute("""
+    c = conn()
+    c.execute("""
     CREATE TABLE IF NOT EXISTS notifications(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         chat_id INTEGER,
         message TEXT,
         kind TEXT,
         notify_time TEXT,
+        last_notify TEXT,
+        repeat_count INTEGER DEFAULT 0,
         done INTEGER DEFAULT 0
     )
     """)
-    con.commit()
-    con.close()
+    c.commit()
+    c.close()
 
 
-async def send_notify(chat_id, nid, message):
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Đã hoàn thành", callback_data=f"done_{nid}")]
-    ])
+def now_vn():
+    return datetime.now(TZ)
+
+
+async def send_reminder(row):
+    nid, chat_id, message, repeat = row
+    kb = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("✅ Đã hoàn thành", callback_data=f"done_{nid}")]]
+    )
+
+    text = (
+        "⚠️ Để ý nha~ không đùa đâu!\n\n"
+        f"📝 Nội dung:\n{message}\n\n"
+        f"⏳ Đã chờ xác nhận: {repeat * 3} phút\n"
+        f"🔁 Lần nhắc: {repeat}\n\n"
+        "Nếu chưa xác nhận sẽ nhắc lại sau 3 phút."
+    )
+
     await app.bot.send_message(
         chat_id=chat_id,
-        text=f"🔔 NHẮC NHỞ\n\n{message}",
-        reply_markup=keyboard
+        text=text,
+        reply_markup=kb
     )
 
 
-def check_notify():
-    now = datetime.now(TZ)
+def checker():
+    now = now_vn()
     day = now.strftime("%Y-%m-%d")
-    hour = now.strftime("%H:%M")
+    hm = now.strftime("%H:%M")
 
-    con = connect()
-    rows = con.execute(
-        "SELECT id,chat_id,message,kind,notify_time,done FROM notifications"
+    c = conn()
+    rows = c.execute(
+        "SELECT id,chat_id,message,kind,notify_time,last_notify,repeat_count,done FROM notifications"
     ).fetchall()
 
     for r in rows:
-        if r[5] == 1:
+        if r[7]:
             continue
 
-        if r[3] == "daily" and r[4] == hour:
-            asyncio.run(send_notify(r[1], r[0], r[2]))
+        send = False
+        repeat = r[6]
 
-        if r[3] == "once" and r[4] == f"{day} {hour}":
-            asyncio.run(send_notify(r[1], r[0], r[2]))
+        if r[3] == "daily" and r[4] == hm and r[5] is None:
+            send = True
 
-    con.close()
+        if r[3] == "once" and r[4] == f"{day} {hm}" and r[5] is None:
+            send = True
+
+        if r[5]:
+            last = datetime.fromisoformat(r[5])
+            if (now - last).total_seconds() >= 180:
+                send = True
+
+        if send:
+            asyncio.run(send_reminder((r[0], r[1], r[2], repeat)))
+            c.execute(
+                "UPDATE notifications SET last_notify=?, repeat_count=? WHERE id=?",
+                (now.isoformat(), repeat + 1, r[0])
+            )
+
+    c.commit()
+    c.close()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -83,18 +115,15 @@ async def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("/them 2026-08-10 09:00 Nội dung")
         return
 
-    con = connect()
-    con.execute(
+    c = conn()
+    c.execute(
         "INSERT INTO notifications(chat_id,message,kind,notify_time) VALUES(?,?,?,?)",
-        (update.effective_chat.id,
-         " ".join(context.args[2:]),
-         "once",
-         context.args[0] + " " + context.args[1])
+        (update.effective_chat.id, " ".join(context.args[2:]), "once",
+         context.args[0]+" "+context.args[1])
     )
-    con.commit()
-    con.close()
-
-    await update.message.reply_text("✅ Đã thêm thông báo")
+    c.commit()
+    c.close()
+    await update.message.reply_text("✅ Đã cài thông báo")
 
 
 async def them_ngay(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -102,61 +131,27 @@ async def them_ngay(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("/them_ngay 08:00 Nội dung")
         return
 
-    con = connect()
-    con.execute(
+    c = conn()
+    c.execute(
         "INSERT INTO notifications(chat_id,message,kind,notify_time) VALUES(?,?,?,?)",
-        (update.effective_chat.id,
-         " ".join(context.args[1:]),
-         "daily",
-         context.args[0])
+        (update.effective_chat.id, " ".join(context.args[1:]), "daily", context.args[0])
     )
-    con.commit()
-    con.close()
-
-    await update.message.reply_text("✅ Đã thêm lịch hàng ngày")
-
-
-async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    con = connect()
-    rows = con.execute(
-        "SELECT id,message,notify_time FROM notifications WHERE chat_id=?",
-        (update.effective_chat.id,)
-    ).fetchall()
-    con.close()
-
-    if not rows:
-        await update.message.reply_text("Không có lịch")
-        return
-
-    text = "📋 Danh sách:\n\n"
-    for r in rows:
-        text += f"{r[0]} - {r[1]} - {r[2]}\n"
-
-    await update.message.reply_text(text)
-
-
-async def xoa(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    con = connect()
-    con.execute(
-        "DELETE FROM notifications WHERE id=? AND chat_id=?",
-        (context.args[0], update.effective_chat.id)
-    )
-    con.commit()
-    con.close()
-    await update.message.reply_text("✅ Đã xóa")
+    c.commit()
+    c.close()
+    await update.message.reply_text("✅ Đã cài lịch hàng ngày")
 
 
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    nid = q.data.split("_")[1]
-
-    con = connect()
-    con.execute("UPDATE notifications SET done=1 WHERE id=?", (nid,))
-    con.commit()
-    con.close()
-
     await q.answer()
-    await q.edit_message_text("✅ Đã hoàn thành. Dừng nhắc.")
+
+    nid = q.data.split("_")[1]
+    c = conn()
+    c.execute("UPDATE notifications SET done=1 WHERE id=?", (nid,))
+    c.commit()
+    c.close()
+
+    await q.edit_message_text("✅ Đã hoàn thành. Đã dừng nhắc.")
 
 
 def main():
@@ -168,11 +163,9 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("them", them))
     app.add_handler(CommandHandler("them_ngay", them_ngay))
-    app.add_handler(CommandHandler("list", list_cmd))
-    app.add_handler(CommandHandler("xoa", xoa))
     app.add_handler(CallbackQueryHandler(done))
 
-    scheduler.add_job(check_notify, "interval", minutes=1)
+    scheduler.add_job(checker, "interval", seconds=30)
     scheduler.start()
 
     app.run_polling()
