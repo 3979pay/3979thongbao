@@ -173,7 +173,7 @@ async def xoa(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer("Đã xác nhận")
+    await q.answer("✅ Đã xác nhận")
 
     nid = q.data.split("_")[1]
 
@@ -185,7 +185,7 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     con.commit()
     con.close()
 
-    await q.edit_message_text("✅ Đã hoàn thành\nĐã dừng nhắc.")
+    await q.message.delete()
 
 
 async def main():
