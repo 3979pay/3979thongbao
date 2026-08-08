@@ -45,8 +45,6 @@ async def send_notify(chat_id, nid, message, repeat):
         text=(
             "⚠️ Để ý nha~ không đùa đâu!\n\n"
             f"📝 Nội dung:\n{message}\n\n"
-            f"⏳ Đã chờ xác nhận: {repeat * 3} phút\n"
-            f"🔁 Lần nhắc: {repeat}\n\n"
             "Không xác nhận sẽ nhắc lại sau 3 phút."
         ),
         reply_markup=kb
