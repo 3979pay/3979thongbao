@@ -40,15 +40,17 @@ async def send_notify(chat_id, nid, message, repeat):
         [InlineKeyboardButton("✅ Đã hoàn thành", callback_data=f"done_{nid}")]
     ])
 
-    await app.bot.send_message(
-        chat_id=chat_id,
-        text=(
-            "⚠️ Để ý nha~ không đùa đâu!\n\n"
-            f"📝 Nội dung:\n{message}\n\n"
-            "Không xác nhận sẽ nhắc lại sau 3 phút."
-        ),
-        reply_markup=kb
-    )
+    with open("gifs/IMG_4396.MP4", "rb") as video:
+        await app.bot.send_animation(
+            chat_id=chat_id,
+            animation=video,
+            caption=(
+                "⚠️ Để ý nha~ không đùa đâu!\n\n"
+                f"📝 Nội dung:\n{message}\n\n"
+                "Không xác nhận sẽ nhắc lại sau 3 phút."
+            ),
+            reply_markup=kb
+        )
 
 
 async def check_notifications(context: ContextTypes.DEFAULT_TYPE):
