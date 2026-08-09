@@ -1,4 +1,3 @@
-import os
 import sqlite3
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -15,10 +14,7 @@ from telegram.ext import (
 # CẤU HÌNH
 # =========================
 
-TOKEN = os.getenv("BOT_TOKEN")
-
-if not TOKEN:
-    raise RuntimeError("Chưa cấu hình BOT_TOKEN")
+TOKEN = "DAN_BOT_TOKEN_CUA_BAN_VAO_DAY"
 ADMIN_ID = 7028707015
 
 TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -399,7 +395,6 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nid = q.data.split("_")[1]
 
     con = connect()
-
     row = con.execute(
         "SELECT message, done FROM notifications WHERE id=?",
         (nid,)
@@ -430,7 +425,6 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     con.close()
 
     user = q.from_user
-
     if user.username:
         confirmed_by = f"@{user.username}"
     else:
@@ -440,31 +434,17 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await q.answer("✅ Đã xác nhận")
 
-    chat_id = q.message.chat_id
-    message_id = q.message.message_id
-
-    # Xóa tin nhắn có GIF/video
-    await context.bot.delete_message(
-        chat_id=chat_id,
-        message_id=message_id
-    )
-
-    # Gửi lại chỉ phần nội dung và người xác nhận
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=(
-            "✅ ĐÃ XÁC NHẬN
-
-"
-            f"📝 Nội dung:
-{message}
-
-"
-            f"👤 Người xác nhận: {confirmed_by}
-"
+    await q.edit_message_caption(
+        caption=(
+            "✅ ĐÃ XÁC NHẬN\n\n"
+            f"📝 Nội dung:\n{message}\n\n"
+            f"👤 Người xác nhận: {confirmed_by}\n"
             f"🕐 {now} • GMT+7"
-        )
+        ),
+        reply_markup=None
     )
+
+
 # =========================
 # CHẠY BOT
 # =========================
