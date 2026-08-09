@@ -1,3 +1,5 @@
+import os
+import random
 import sqlite3
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -14,11 +16,15 @@ from telegram.ext import (
 # CẤU HÌNH
 # =========================
 
-TOKEN = "DAN_BOT_TOKEN_CUA_BAN_VAO_DAY"
-ADMIN_ID = 7028707015
+TOKEN = os.getenv("BOT_TOKEN")
 
+if not TOKEN:
+    raise RuntimeError("Chưa cấu hình BOT_TOKEN")
+
+ADMIN_ID = 7028707015
 TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 DB = "notifications.db"
+MEDIA_DIR = "gifs"
 
 
 # =========================
@@ -152,6 +158,7 @@ async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     con.close()
 
     text = "👥 DANH SÁCH ĐƯỢC PHÉP\n\n"
+
     for row in rows:
         if row[0] == ADMIN_ID:
             text += f"👑 {row[0]} - ADMIN\n"
@@ -159,6 +166,29 @@ async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"👤 {row[0]}\n"
 
     await update.message.reply_text(text)
+
+
+# =========================
+# MEDIA
+# =========================
+
+def get_media_files():
+    files = []
+
+    if not os.path.isdir(MEDIA_DIR):
+        return files
+
+    for filename in os.listdir(MEDIA_DIR):
+        full_path = os.path.join(MEDIA_DIR, filename)
+
+        if (
+            os.path.isfile(full_path)
+            and os.path.getsize(full_path) > 0
+            and filename.lower().endswith((".gif", ".mp4"))
+        ):
+            files.append(full_path)
+
+    return files
 
 
 # =========================
@@ -170,16 +200,29 @@ async def send_notify(chat_id, nid, message, repeat):
         [InlineKeyboardButton("✅ Đã hoàn thành", callback_data=f"done_{nid}")]
     ])
 
-    with open("gifs/IMG_4396.MP4", "rb") as video:
-        await app.bot.send_animation(
+    caption = (
+        "⚠️ Để ý nha~ không đùa đâu!\n\n"
+        f"📝 Nội dung:\n{message}\n\n"
+        "🕐 Múi giờ: GMT+7\n"
+        "Không xác nhận sẽ nhắc lại sau 3 phút."
+    )
+
+    media_files = get_media_files()
+
+    if media_files:
+        media_path = random.choice(media_files)
+
+        with open(media_path, "rb") as media:
+            await app.bot.send_animation(
+                chat_id=chat_id,
+                animation=media,
+                caption=caption,
+                reply_markup=kb
+            )
+    else:
+        await app.bot.send_message(
             chat_id=chat_id,
-            animation=video,
-            caption=(
-                "⚠️ Để ý nha~ không đùa đâu!\n\n"
-                f"📝 Nội dung:\n{message}\n\n"
-                "🕐 Múi giờ: GMT+7\n"
-                "Không xác nhận sẽ nhắc lại sau 3 phút."
-            ),
+            text=caption,
             reply_markup=kb
         )
 
@@ -205,21 +248,22 @@ async def check_notifications(context: ContextTypes.DEFAULT_TYPE):
         if r[7]:
             continue
 
-        send = False
+        should_send = False
 
         if r[3] == "daily" and r[4] == hm and r[5] is None:
-            send = True
+            should_send = True
 
         if r[3] == "once" and r[4] == f"{day} {hm}" and r[5] is None:
-            send = True
+            should_send = True
 
         if r[5]:
             last = datetime.fromisoformat(r[5])
             if (now - last).total_seconds() >= 180:
-                send = True
+                should_send = True
 
-        if send:
+        if should_send:
             await send_notify(r[1], r[0], r[2], r[6] + 1)
+
             con.execute(
                 """
                 UPDATE notifications
@@ -247,7 +291,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Gửi ID này cho Admin để được cấp quyền."
         )
 
-    await update.message.reply_text(
+    text = (
         "🔔 BOT NHẮC NHỞ\n\n"
         "/them YYYY-MM-DD HH:MM Nội dung\n"
         "/them_ngay HH:MM Nội dung\n"
@@ -255,6 +299,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/xoa ID\n"
         "/id"
     )
+
+    if user_id == ADMIN_ID:
+        text += (
+            "\n\n👑 LỆNH ADMIN\n"
+            "/adduser ID\n"
+            "/deluser ID\n"
+            "/users"
+        )
+
+    await update.message.reply_text(text)
 
 
 async def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -268,8 +322,16 @@ async def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/them 2026-08-10 09:00 Nội dung"
         )
 
-    time = context.args[0] + " " + context.args[1]
+    time_text = context.args[0] + " " + context.args[1]
     msg = " ".join(context.args[2:])
+
+    try:
+        datetime.strptime(time_text, "%Y-%m-%d %H:%M")
+    except ValueError:
+        return await update.message.reply_text(
+            "❌ Sai định dạng.\n"
+            "Ví dụ:\n/them 2026-08-10 09:00 Nội dung"
+        )
 
     con = connect()
     con.execute(
@@ -277,14 +339,14 @@ async def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
         INSERT INTO notifications(chat_id,message,kind,notify_time)
         VALUES(?,?,?,?)
         """,
-        (update.effective_chat.id, msg, "once", time)
+        (update.effective_chat.id, msg, "once", time_text)
     )
     con.commit()
     con.close()
 
     await update.message.reply_text(
         f"✅ Đã cài thông báo\n\n"
-        f"⏰ {time}\n"
+        f"⏰ {time_text}\n"
         f"🌏 GMT+7\n"
         f"📝 {msg}\n\n"
         "🔁 Không xác nhận sẽ nhắc lại sau 3 phút"
@@ -302,7 +364,16 @@ async def them_ngay(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/them_ngay 08:00 Nội dung"
         )
 
+    time_text = context.args[0]
     msg = " ".join(context.args[1:])
+
+    try:
+        datetime.strptime(time_text, "%H:%M")
+    except ValueError:
+        return await update.message.reply_text(
+            "❌ Sai định dạng giờ.\n"
+            "Ví dụ:\n/them_ngay 08:00 Nội dung"
+        )
 
     con = connect()
     con.execute(
@@ -310,14 +381,14 @@ async def them_ngay(update: Update, context: ContextTypes.DEFAULT_TYPE):
         INSERT INTO notifications(chat_id,message,kind,notify_time)
         VALUES(?,?,?,?)
         """,
-        (update.effective_chat.id, msg, "daily", context.args[0])
+        (update.effective_chat.id, msg, "daily", time_text)
     )
     con.commit()
     con.close()
 
     await update.message.reply_text(
         f"✅ Đã cài lịch hàng ngày\n\n"
-        f"⏰ {context.args[0]}\n"
+        f"⏰ {time_text}\n"
         f"🌏 GMT+7\n"
         f"📝 {msg}"
     )
@@ -334,16 +405,20 @@ async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
         SELECT id,message,notify_time
         FROM notifications
-        WHERE chat_id=?
+        WHERE chat_id=? AND done=0
+        ORDER BY id
         """,
         (update.effective_chat.id,)
     ).fetchall()
     con.close()
 
     if not rows:
-        return await update.message.reply_text("Không có lịch")
+        return await update.message.reply_text(
+            "Không có lịch đang hoạt động."
+        )
 
-    text = "📋 Danh sách:\n\n"
+    text = "📋 DANH SÁCH LỊCH\n\n"
+
     for r in rows:
         text += (
             f"ID: {r[0]}\n"
@@ -366,17 +441,25 @@ async def xoa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         nid = int(context.args[0])
     except ValueError:
-        return await update.message.reply_text("❌ ID lịch không hợp lệ.")
+        return await update.message.reply_text(
+            "❌ ID lịch không hợp lệ."
+        )
 
     con = connect()
-    con.execute(
+    cur = con.execute(
         "DELETE FROM notifications WHERE id=? AND chat_id=?",
         (nid, update.effective_chat.id)
     )
     con.commit()
+    deleted = cur.rowcount
     con.close()
 
-    await update.message.reply_text("✅ Đã xóa")
+    if deleted:
+        await update.message.reply_text("✅ Đã xóa lịch.")
+    else:
+        await update.message.reply_text(
+            "❌ Không tìm thấy lịch này trong cuộc trò chuyện."
+        )
 
 
 # =========================
@@ -392,7 +475,13 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
             show_alert=True
         )
 
-    nid = q.data.split("_")[1]
+    try:
+        nid = int(q.data.split("_", 1)[1])
+    except (ValueError, IndexError):
+        return await q.answer(
+            "❌ Thông báo không hợp lệ.",
+            show_alert=True
+        )
 
     con = connect()
     row = con.execute(
@@ -425,6 +514,7 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     con.close()
 
     user = q.from_user
+
     if user.username:
         confirmed_by = f"@{user.username}"
     else:
@@ -434,14 +524,24 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await q.answer("✅ Đã xác nhận")
 
-    await q.edit_message_caption(
-        caption=(
+    chat_id = q.message.chat_id
+    message_id = q.message.message_id
+
+    # XÓA TOÀN BỘ TIN NHẮN GIF/MP4 + NÚT
+    await context.bot.delete_message(
+        chat_id=chat_id,
+        message_id=message_id
+    )
+
+    # GỬI LẠI CHỈ PHẦN CHỮ
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
             "✅ ĐÃ XÁC NHẬN\n\n"
             f"📝 Nội dung:\n{message}\n\n"
             f"👤 Người xác nhận: {confirmed_by}\n"
             f"🕐 {now} • GMT+7"
-        ),
-        reply_markup=None
+        )
     )
 
 
@@ -467,7 +567,9 @@ def main():
     app.add_handler(CommandHandler("list", list_cmd))
     app.add_handler(CommandHandler("xoa", xoa))
 
-    app.add_handler(CallbackQueryHandler(done))
+    app.add_handler(
+        CallbackQueryHandler(done, pattern=r"^done_\d+$")
+    )
 
     app.job_queue.run_repeating(
         check_notifications,
