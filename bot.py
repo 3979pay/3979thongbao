@@ -14,8 +14,7 @@ from telegram.ext import (
 # CẤU HÌNH
 # =========================
 
-TOKEN = "8776864453:AAEGGFR09xA1gXfEjDne5n6NXl9yAWPW0Vs"
-
+TOKEN = "DAN_BOT_TOKEN_CUA_BAN_VAO_DAY"
 ADMIN_ID = 7028707015
 
 TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -52,7 +51,6 @@ def init_db():
         )
     """)
 
-    # Admin luôn có quyền
     con.execute(
         "INSERT OR IGNORE INTO allowed_users(user_id) VALUES(?)",
         (ADMIN_ID,)
@@ -63,7 +61,7 @@ def init_db():
 
 
 # =========================
-# KIỂM TRA QUYỀN
+# QUYỀN
 # =========================
 
 def is_allowed(user_id):
@@ -71,128 +69,89 @@ def is_allowed(user_id):
         return True
 
     con = connect()
-
     row = con.execute(
         "SELECT 1 FROM allowed_users WHERE user_id=?",
         (user_id,)
     ).fetchone()
-
     con.close()
 
     return row is not None
 
 
 # =========================
-# ID
+# ID / QUẢN LÝ USER
 # =========================
 
 async def id_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
     await update.message.reply_text(
-        f"🆔 Telegram ID của bạn:\n\n{user_id}"
+        f"🆔 Telegram ID của bạn:\n\n{update.effective_user.id}"
     )
 
 
-# =========================
-# THÊM QUYỀN
-# =========================
-
 async def adduser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text(
-            "⛔ Bạn không có quyền sử dụng lệnh này."
-        )
+        return await update.message.reply_text("⛔ Chỉ Admin được cấp quyền.")
 
     if not context.args:
-        return await update.message.reply_text(
-            "Cách dùng:\n/adduser ID"
-        )
+        return await update.message.reply_text("Cách dùng:\n/adduser ID")
 
     try:
         user_id = int(context.args[0])
     except ValueError:
-        return await update.message.reply_text(
-            "❌ ID không hợp lệ."
-        )
+        return await update.message.reply_text("❌ ID không hợp lệ.")
 
     con = connect()
-
     con.execute(
         "INSERT OR IGNORE INTO allowed_users(user_id) VALUES(?)",
         (user_id,)
     )
-
     con.commit()
     con.close()
 
     await update.message.reply_text(
-        f"✅ Đã cấp quyền\n\n🆔 {user_id}"
+        f"✅ Đã cấp quyền cho ID: {user_id}"
     )
 
 
-# =========================
-# XÓA QUYỀN
-# =========================
-
 async def deluser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text(
-            "⛔ Bạn không có quyền sử dụng lệnh này."
-        )
+        return await update.message.reply_text("⛔ Chỉ Admin được xóa quyền.")
 
     if not context.args:
-        return await update.message.reply_text(
-            "Cách dùng:\n/deluser ID"
-        )
+        return await update.message.reply_text("Cách dùng:\n/deluser ID")
 
     try:
         user_id = int(context.args[0])
     except ValueError:
-        return await update.message.reply_text(
-            "❌ ID không hợp lệ."
-        )
+        return await update.message.reply_text("❌ ID không hợp lệ.")
 
     if user_id == ADMIN_ID:
-        return await update.message.reply_text(
-            "⛔ Không thể xóa quyền Admin."
-        )
+        return await update.message.reply_text("⛔ Không thể xóa Admin.")
 
     con = connect()
-
     con.execute(
         "DELETE FROM allowed_users WHERE user_id=?",
         (user_id,)
     )
-
     con.commit()
     con.close()
 
     await update.message.reply_text(
-        f"🗑 Đã xóa quyền\n\n🆔 {user_id}"
+        f"🗑 Đã xóa quyền ID: {user_id}"
     )
 
 
-# =========================
-# DANH SÁCH NGƯỜI ĐƯỢC QUYỀN
-# =========================
-
 async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text(
-            "⛔ Bạn không có quyền sử dụng lệnh này."
-        )
+        return await update.message.reply_text("⛔ Chỉ Admin được xem.")
 
     con = connect()
-
     rows = con.execute(
         "SELECT user_id FROM allowed_users ORDER BY user_id"
     ).fetchall()
-
     con.close()
 
     text = "👥 DANH SÁCH ĐƯỢC PHÉP\n\n"
-
     for row in rows:
         if row[0] == ADMIN_ID:
             text += f"👑 {row[0]} - ADMIN\n"
@@ -208,12 +167,7 @@ async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def send_notify(chat_id, nid, message, repeat):
     kb = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "✅ Đã hoàn thành",
-                callback_data=f"done_{nid}"
-            )
-        ]
+        [InlineKeyboardButton("✅ Đã hoàn thành", callback_data=f"done_{nid}")]
     ])
 
     with open("gifs/IMG_4396.MP4", "rb") as video:
@@ -236,77 +190,43 @@ async def send_notify(chat_id, nid, message, repeat):
 
 async def check_notifications(context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now(TZ)
-
     day = now.strftime("%Y-%m-%d")
     hm = now.strftime("%H:%M")
 
     con = connect()
-
     rows = con.execute(
         """
-        SELECT
-            id,
-            chat_id,
-            message,
-            kind,
-            notify_time,
-            last_sent,
-            repeat_count,
-            done
+        SELECT id,chat_id,message,kind,notify_time,last_sent,repeat_count,done
         FROM notifications
         """
     ).fetchall()
 
     for r in rows:
-
         if r[7]:
             continue
 
         send = False
 
-        # Lịch hàng ngày
-        if (
-            r[3] == "daily"
-            and r[4] == hm
-            and r[5] is None
-        ):
+        if r[3] == "daily" and r[4] == hm and r[5] is None:
             send = True
 
-        # Lịch 1 lần
-        if (
-            r[3] == "once"
-            and r[4] == f"{day} {hm}"
-            and r[5] is None
-        ):
+        if r[3] == "once" and r[4] == f"{day} {hm}" and r[5] is None:
             send = True
 
-        # Nhắc lại sau 3 phút
         if r[5]:
             last = datetime.fromisoformat(r[5])
-
             if (now - last).total_seconds() >= 180:
                 send = True
 
         if send:
-            await send_notify(
-                r[1],
-                r[0],
-                r[2],
-                r[6] + 1
-            )
-
+            await send_notify(r[1], r[0], r[2], r[6] + 1)
             con.execute(
                 """
                 UPDATE notifications
-                SET
-                    last_sent=?,
-                    repeat_count=repeat_count+1
+                SET last_sent=?, repeat_count=repeat_count+1
                 WHERE id=?
                 """,
-                (
-                    now.isoformat(),
-                    r[0]
-                )
+                (now.isoformat(), r[0])
             )
 
     con.commit()
@@ -314,7 +234,7 @@ async def check_notifications(context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# START
+# LỆNH BOT
 # =========================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -337,10 +257,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# =========================
-# THÊM LỊCH 1 LẦN
-# =========================
-
 async def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update.effective_user.id):
         return await update.message.reply_text(
@@ -356,25 +272,13 @@ async def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = " ".join(context.args[2:])
 
     con = connect()
-
     con.execute(
         """
-        INSERT INTO notifications(
-            chat_id,
-            message,
-            kind,
-            notify_time
-        )
+        INSERT INTO notifications(chat_id,message,kind,notify_time)
         VALUES(?,?,?,?)
         """,
-        (
-            update.effective_chat.id,
-            msg,
-            "once",
-            time
-        )
+        (update.effective_chat.id, msg, "once", time)
     )
-
     con.commit()
     con.close()
 
@@ -386,10 +290,6 @@ async def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔁 Không xác nhận sẽ nhắc lại sau 3 phút"
     )
 
-
-# =========================
-# THÊM LỊCH HÀNG NGÀY
-# =========================
 
 async def them_ngay(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update.effective_user.id):
@@ -405,25 +305,13 @@ async def them_ngay(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = " ".join(context.args[1:])
 
     con = connect()
-
     con.execute(
         """
-        INSERT INTO notifications(
-            chat_id,
-            message,
-            kind,
-            notify_time
-        )
+        INSERT INTO notifications(chat_id,message,kind,notify_time)
         VALUES(?,?,?,?)
         """,
-        (
-            update.effective_chat.id,
-            msg,
-            "daily",
-            context.args[0]
-        )
+        (update.effective_chat.id, msg, "daily", context.args[0])
     )
-
     con.commit()
     con.close()
 
@@ -435,10 +323,6 @@ async def them_ngay(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# =========================
-# DANH SÁCH LỊCH
-# =========================
-
 async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update.effective_user.id):
         return await update.message.reply_text(
@@ -446,7 +330,6 @@ async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     con = connect()
-
     rows = con.execute(
         """
         SELECT id,message,notify_time
@@ -455,16 +338,12 @@ async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """,
         (update.effective_chat.id,)
     ).fetchall()
-
     con.close()
 
     if not rows:
-        return await update.message.reply_text(
-            "Không có lịch"
-        )
+        return await update.message.reply_text("Không có lịch")
 
     text = "📋 Danh sách:\n\n"
-
     for r in rows:
         text += (
             f"ID: {r[0]}\n"
@@ -475,10 +354,6 @@ async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 
-# =========================
-# XÓA LỊCH
-# =========================
-
 async def xoa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update.effective_user.id):
         return await update.message.reply_text(
@@ -486,74 +361,87 @@ async def xoa(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     if not context.args:
-        return await update.message.reply_text(
-            "Cách dùng:\n/xoa ID"
-        )
+        return await update.message.reply_text("Cách dùng:\n/xoa ID")
 
     try:
         nid = int(context.args[0])
     except ValueError:
-        return await update.message.reply_text(
-            "❌ ID lịch không hợp lệ."
-        )
+        return await update.message.reply_text("❌ ID lịch không hợp lệ.")
 
     con = connect()
-
     con.execute(
-        """
-        DELETE FROM notifications
-        WHERE id=? AND chat_id=?
-        """,
-        (
-            nid,
-            update.effective_chat.id
-        )
+        "DELETE FROM notifications WHERE id=? AND chat_id=?",
+        (nid, update.effective_chat.id)
     )
-
     con.commit()
     con.close()
 
-    await update.message.reply_text(
-        "✅ Đã xóa"
-    )
+    await update.message.reply_text("✅ Đã xóa")
 
 
 # =========================
-# HOÀN THÀNH
+# XÁC NHẬN
 # =========================
 
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
 
-    # Người không được cấp quyền không thể bấm hoàn thành
     if not is_allowed(q.from_user.id):
         return await q.answer(
-            "⛔ Bạn không có quyền.",
+            "⛔ Bạn chưa được cấp quyền.",
             show_alert=True
         )
-
-    await q.answer("✅ Đã xác nhận")
 
     nid = q.data.split("_")[1]
 
     con = connect()
+    row = con.execute(
+        "SELECT message, done FROM notifications WHERE id=?",
+        (nid,)
+    ).fetchone()
+
+    if not row:
+        con.close()
+        return await q.answer(
+            "❌ Không tìm thấy thông báo.",
+            show_alert=True
+        )
+
+    message = row[0]
+    already_done = row[1]
+
+    if already_done:
+        con.close()
+        return await q.answer(
+            "Thông báo này đã được xác nhận.",
+            show_alert=True
+        )
 
     con.execute(
-        """
-        UPDATE notifications
-        SET done=1
-        WHERE id=?
-        """,
+        "UPDATE notifications SET done=1 WHERE id=?",
         (nid,)
     )
-
     con.commit()
     con.close()
 
-    # Xóa toàn bộ video + chữ + nút
-    await context.bot.delete_message(
-        chat_id=q.message.chat_id,
-        message_id=q.message.message_id
+    user = q.from_user
+    if user.username:
+        confirmed_by = f"@{user.username}"
+    else:
+        confirmed_by = user.full_name
+
+    now = datetime.now(TZ).strftime("%H:%M")
+
+    await q.answer("✅ Đã xác nhận")
+
+    await q.edit_message_caption(
+        caption=(
+            "✅ ĐÃ XÁC NHẬN\n\n"
+            f"📝 Nội dung:\n{message}\n\n"
+            f"👤 Người xác nhận: {confirmed_by}\n"
+            f"🕐 {now} • GMT+7"
+        ),
+        reply_markup=None
     )
 
 
@@ -568,45 +456,18 @@ def main():
 
     app = Application.builder().token(TOKEN).build()
 
-    app.add_handler(
-        CommandHandler("start", start)
-    )
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("id", id_cmd))
+    app.add_handler(CommandHandler("adduser", adduser))
+    app.add_handler(CommandHandler("deluser", deluser))
+    app.add_handler(CommandHandler("users", users_cmd))
 
-    app.add_handler(
-        CommandHandler("id", id_cmd)
-    )
+    app.add_handler(CommandHandler("them", them))
+    app.add_handler(CommandHandler("them_ngay", them_ngay))
+    app.add_handler(CommandHandler("list", list_cmd))
+    app.add_handler(CommandHandler("xoa", xoa))
 
-    app.add_handler(
-        CommandHandler("adduser", adduser)
-    )
-
-    app.add_handler(
-        CommandHandler("deluser", deluser)
-    )
-
-    app.add_handler(
-        CommandHandler("users", users_cmd)
-    )
-
-    app.add_handler(
-        CommandHandler("them", them)
-    )
-
-    app.add_handler(
-        CommandHandler("them_ngay", them_ngay)
-    )
-
-    app.add_handler(
-        CommandHandler("list", list_cmd)
-    )
-
-    app.add_handler(
-        CommandHandler("xoa", xoa)
-    )
-
-    app.add_handler(
-        CallbackQueryHandler(done)
-    )
+    app.add_handler(CallbackQueryHandler(done))
 
     app.job_queue.run_repeating(
         check_notifications,
