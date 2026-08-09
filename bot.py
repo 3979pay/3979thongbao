@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -14,7 +15,10 @@ from telegram.ext import (
 # CẤU HÌNH
 # =========================
 
-TOKEN = "DAN_BOT_TOKEN_CUA_BAN_VAO_DAY"
+TOKEN = os.getenv("BOT_TOKEN")
+
+if not TOKEN:
+    raise RuntimeError("Chưa cấu hình BOT_TOKEN")
 ADMIN_ID = 7028707015
 
 TZ = ZoneInfo("Asia/Ho_Chi_Minh")
